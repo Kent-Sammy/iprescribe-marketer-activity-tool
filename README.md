@@ -21,7 +21,7 @@ happened**.
 | Styling | Tailwind CSS v4 |
 | UI primitives | shadcn/ui pattern (`src/components/ui/*`), Radix, lucide-react |
 | State (mock) | React context + `localStorage` (`src/lib/mock/store.tsx`) |
-| Dates | `Intl.DateTimeFormat` pinned to `Africa/Lagos` (`src/lib/datetime.ts`) |
+| Dates | Native `Intl.DateTimeFormat` pinned to `Africa/Lagos` (`src/lib/datetime.ts`) |
 
 ## Getting started
 
