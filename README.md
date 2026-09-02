@@ -48,17 +48,45 @@ pnpm format    # prettier --write .
 Auth is handled by **Clerk**. See [Environment variables](#environment-variables)
 for the required keys and the one dashboard setting.
 
-- **`/login`** — one page with a **Marketer / Admin** sign-in toggle and a
-  **Create marketer account** flow (email + password, with email-code
-  verification).
+- **`/login`** — one page, two entry points:
+  - **Marketer** — sign in, or **Create an account** (email + password, email-code
+    verification). Public Clerk sign-up.
+  - **Admin** — **sign-in only**. No "create account" link, no way to sign up an
+    admin. After a successful sign-in the app checks the Clerk role; a
+    non-admin sees *"You don't have admin access"* and is offered their own
+    dashboard instead — access to `/admin` is never granted.
 - **Roles** come from Clerk `publicMetadata.role`. `"admin"` ⇒ admin; anything
-  else ⇒ marketer. New sign-ups are marketers automatically.
-- **Admin accounts have no public sign-up.** Create them in the Clerk dashboard
-  and set `publicMetadata` to `{ "role": "admin" }`.
-- **`src/middleware.ts`** enforces access on every request: unauthenticated →
-  `/login`; non-admin on `/admin/*` → `/dashboard`; admin on the marketer
-  workspace → `/admin`. Direct URL entry is covered.
+  else (including every self-service sign-up) ⇒ marketer. Identity is decided by
+  this role, never by "does the email exist".
+- **Admin accounts are provisioned in the Clerk dashboard only** — see
+  [Creating the first admin](#creating-the-first-admin).
+- Server-side protection, two layers:
+  - **`src/middleware.ts`** — every request: unauthenticated → `/login`;
+    non-admin on `/admin/*` → `/dashboard`; admin on the marketer workspace →
+    `/admin`.
+  - **`src/app/(admin)/admin/layout.tsx`** — a server component that re-checks
+    the Clerk role with `auth()` and redirects non-admins before any admin page
+    renders (defense in depth; not just hidden UI).
 - After login: marketer → `/dashboard`, admin → `/admin`.
+
+### Creating the first admin
+
+There is no bootstrap admin and no admin sign-up, so create it by hand once:
+
+1. **Clerk Dashboard → Users → Create user** (or invite). Set the email +
+   password you'll use to sign in. (If you want to reuse an account that already
+   signed up as a marketer, just select that user instead.)
+2. Open the user → **Metadata → Public** → set:
+   ```json
+   { "role": "admin" }
+   ```
+   Save. (This is `publicMetadata` — editable only from the dashboard/Backend
+   API, never by the user.)
+3. Make sure the session-token claim from
+   [Environment variables](#environment-variables) is configured, then go to
+   `/login`, choose **Admin**, and sign in. You land on `/admin`.
+
+Repeat step 1–2 for any further admins. Everyone else stays a marketer.
 
 Facilities/reports still use a per-browser mock store (`src/lib/mock/`). Submitted
 reports persist to `localStorage`; **Reset demo data** (top bar) restores the
