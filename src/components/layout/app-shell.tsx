@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LogOut, Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { isNavItemActive, type NavItem } from "@/lib/nav";
 import { useAuthActions, useCurrentUser } from "@/lib/auth/mock-session";
-import { RoleSwitcher } from "@/components/layout/role-switcher";
 import { ResetDemoDataButton } from "@/components/layout/reset-demo-data";
 
 interface AppShellProps {
@@ -20,13 +19,12 @@ interface AppShellProps {
 
 export function AppShell({ nav, homeHref, children }: AppShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const user = useCurrentUser();
   const { signOut } = useAuthActions();
 
   function handleSignOut() {
-    signOut();
-    router.push("/login");
+    // Clerk clears the session and redirects to /login.
+    void signOut();
   }
 
   return (
@@ -48,7 +46,6 @@ export function AppShell({ nav, homeHref, children }: AppShellProps) {
             <div className="hidden md:block">
               <ResetDemoDataButton />
             </div>
-            <RoleSwitcher />
             <div className="hidden text-right sm:block">
               <p className="text-xs font-medium leading-tight">{user.name}</p>
               <p className="text-[11px] leading-tight text-muted-foreground">

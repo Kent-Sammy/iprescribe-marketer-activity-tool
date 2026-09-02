@@ -5,10 +5,11 @@ facilities (pharmacies, hospitals/clinics, laboratories), and for the admin team
 to see **what each marketer did, where they went, who they met, and what
 happened**.
 
-> **Status: frontend only.** This build is the complete UI running on **mock data
-> and mock authentication**. There is no database, no real auth, and no server
-> API yet. The backend (Postgres + Prisma + Auth.js + Google geocoding) is a
-> later phase — see [Roadmap](#roadmap).
+> **Status.** Authentication is **real** (Clerk): marketer sign-up + sign-in,
+> admin sign-in, role-based route protection via middleware. The rest of the app
+> (facilities, reports data) still runs on a per-browser **mock store** until the
+> data backend (Postgres + Prisma + Google geocoding) lands — see
+> [Roadmap](#roadmap).
 
 ---
 
@@ -42,19 +43,27 @@ pnpm lint      # eslint
 pnpm format    # prettier --write .
 ```
 
-## Using the app (mock mode)
+## Authentication & access control
 
-- The landing page redirects to **`/login`**. Auth is faked — any credentials
-  work, and **“Log in”** drops you straight into the marketer workspace.
-- The login screen also has **Quick access (dev)**: pick a marketer, or enter the
-  **Admin** workspace.
-- Once inside, the **top-bar role switcher** (flask icon) jumps between the admin
-  experience and any marketer’s experience at any time.
-- **No routes are guarded.** Every screen is reachable directly by URL.
-- **Reset demo data** (top bar) restores the seeded dataset and clears any
-  reports you submitted in the browser.
-- Submitted reports are persisted to `localStorage`, so they survive a reload and
-  appear across the marketer and admin screens.
+Auth is handled by **Clerk**. See [Environment variables](#environment-variables)
+for the required keys and the one dashboard setting.
+
+- **`/login`** — one page with a **Marketer / Admin** sign-in toggle and a
+  **Create marketer account** flow (email + password, with email-code
+  verification).
+- **Roles** come from Clerk `publicMetadata.role`. `"admin"` ⇒ admin; anything
+  else ⇒ marketer. New sign-ups are marketers automatically.
+- **Admin accounts have no public sign-up.** Create them in the Clerk dashboard
+  and set `publicMetadata` to `{ "role": "admin" }`.
+- **`src/middleware.ts`** enforces access on every request: unauthenticated →
+  `/login`; non-admin on `/admin/*` → `/dashboard`; admin on the marketer
+  workspace → `/admin`. Direct URL entry is covered.
+- After login: marketer → `/dashboard`, admin → `/admin`.
+
+Facilities/reports still use a per-browser mock store (`src/lib/mock/`). Submitted
+reports persist to `localStorage`; **Reset demo data** (top bar) restores the
+seed. A brand-new marketer account starts with no reports of its own; the admin
+portal shows the full seeded dataset.
 
 ### Screens
 
@@ -70,15 +79,16 @@ daily, `?date=`), `/admin/daily`, `/admin/reports`, `/admin/reports/[id]`,
 ```
 src/
   app/
-    (auth)/login/              # mock sign-in
+    (auth)/login/              # Clerk sign-in / marketer sign-up
     (marketer)/                # marketer shell + screens
     (admin)/admin/             # admin shell + screens
-    layout.tsx, providers.tsx  # root layout + client provider tree
+    layout.tsx, providers.tsx  # root layout (<ClerkProvider>) + client providers
+  middleware.ts                # Clerk auth + role-based route protection
   components/
     ui/                        # shadcn primitives
     shared/                    # StatCard, badges, timelines, tables, report detail
     forms/                     # ReportForm wizard, FacilityCombobox, LocationCapture
-    layout/                    # AppShell, RoleSwitcher, ResetDemoData
+    layout/                    # AppShell, ResetDemoData
     admin/                     # DailyActivityView
   lib/
     types.ts                   # domain types + enum label maps (mirror the schema)
@@ -86,17 +96,39 @@ src/
     reporting.ts               # pure aggregation/filtering (future service-layer logic)
     geocoding.ts               # MOCK reverse geocoding (swap for Google later)
     nav.ts                     # nav config
-    auth/mock-session.tsx      # MOCK auth — replace with Auth.js
+    auth/mock-session.tsx      # session adapter over Clerk (name kept for import stability)
     mock/
       data.ts                  # seed marketers / facilities / reports
       store.tsx                # in-memory + localStorage data store
+  types/globals.d.ts           # Clerk session-claim types
 ```
 
-## What is mocked, and how to replace it
+## Environment variables
+
+Set these in **Vercel → Project → Settings → Environment Variables** (and in a
+local `.env.local`, copied from `.env.example`):
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ✅ | Clerk dashboard → API keys. `pk_test_…` for Preview/Dev, `pk_live_…` for Production. The build fails without it. |
+| `CLERK_SECRET_KEY` | ✅ | Same page. `sk_test_…` / `sk_live_…`. Server-only. |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | ✅ | `/login` |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | ✅ | `/login` |
+
+**One required Clerk dashboard setting** — *Sessions → Customize session token* →
+add this claim so middleware can read the role without an API call:
+
+```json
+{ "metadata": "{{user.public_metadata}}" }
+```
+
+To make an **admin**: Clerk dashboard → Users → (create/select user) → Metadata →
+Public → `{ "role": "admin" }`.
+
+## What is still mocked, and how to replace it
 
 | Mock | File | Replace with |
 | --- | --- | --- |
-| Authentication / session | `src/lib/auth/mock-session.tsx` | Auth.js v5. `useSession()` already returns `{ data, status }` like `next-auth/react`; swap the provider, delete `RoleSwitcher`, re-add middleware + per-service role checks. |
 | Data store (CRUD) | `src/lib/mock/store.tsx`, `src/lib/mock/data.ts` | Server Components calling `src/lib/services/*` (Prisma) for reads; Server Actions for writes. Selector hooks can stay as thin client wrappers if useful. |
 | Reverse geocoding | `src/lib/geocoding.ts` | Server route calling the Google Geocoding API with a secret key. Keep `getAddressForCoords()` / `mapLink()` signatures. |
 | Location capture | `src/components/forms/location-capture.tsx` | `navigator.geolocation.getCurrentPosition` + the geocode route. The `value` / `onChange` contract and the “must succeed before submit” rule stay the same. |
@@ -114,19 +146,20 @@ src/
 
 ## Roadmap
 
-1. ✅ Frontend on mock data (this build)
-2. Data layer — Prisma schema, migrations, seed (Neon Postgres)
-3. Auth.js v5 (credentials), middleware, role checks
+1. ✅ Frontend on mock data
+2. ✅ Real auth + role-based access control (Clerk)
+3. Data layer — Prisma schema, migrations, seed (Neon Postgres)
 4. Wire Submit Report + dashboards to real data (Server Actions / Components)
 5. Admin drill-downs on real data
 6. Facilities on real data
 7. Google reverse geocoding + real browser geolocation
-8. Polish, tests, deploy to Vercel
+8. Polish, tests
 
 ## Notes
 
 - `next.config.mjs` currently sets `eslint.ignoreDuringBuilds: true` so a stray
-  lint warning doesn’t block `next build` during the mock phase. Run `pnpm lint`
-  directly; re-enable build-time lint when CI enforces it.
-- `.env.example` documents the variables the backend phases will need. None are
-  required to run the current frontend.
+  lint warning doesn’t block `next build`. Run `pnpm lint` directly; re-enable
+  build-time lint when CI enforces it.
+- The Clerk keys (see [Environment variables](#environment-variables)) are
+  required for `next build` and to run the app. The Postgres/geocoding vars in
+  `.env.example` are for later phases and are not needed yet.
