@@ -26,7 +26,8 @@ import {
 import type { ContactRole, Facility, FacilityType, Marketer, Outcome, Report } from "@/lib/types";
 import { buildSeed, type MockDataset } from "@/lib/mock/data";
 
-const STORAGE_KEY = "mat_mock_data_v1";
+// v2: reports now carry contactPhone + optional facility-owner fields.
+const STORAGE_KEY = "mat_mock_data_v2";
 
 export interface NewFacilityInput {
   name: string;
@@ -43,7 +44,11 @@ export interface NewReportInput {
   facilityId: string;
   facilityTypeSnapshot: FacilityType;
   contactName: string;
+  contactPhone: string;
   contactRole: ContactRole;
+  ownerName?: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
   outcome: Outcome;
   followUpDate?: string;
   remarks: string;
@@ -115,7 +120,11 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
       facilityId: input.facilityId,
       facilityTypeSnapshot: input.facilityTypeSnapshot,
       contactName: input.contactName.trim(),
+      contactPhone: input.contactPhone.trim(),
       contactRole: input.contactRole,
+      ownerName: input.ownerName?.trim() || undefined,
+      ownerPhone: input.ownerPhone?.trim() || undefined,
+      ownerEmail: input.ownerEmail?.trim() || undefined,
       outcome: input.outcome,
       followUpRequired: input.outcome === "FOLLOW_UP_REQUIRED",
       followUpDate: input.outcome === "FOLLOW_UP_REQUIRED" ? input.followUpDate : undefined,

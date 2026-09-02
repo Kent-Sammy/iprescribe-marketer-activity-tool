@@ -54,6 +54,10 @@ function SuccessInner() {
               </span>
             </div>
             <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Phone</span>
+              <span>{report.contactPhone || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Outcome</span>
               <OutcomeBadge outcome={report.outcome} />
             </div>

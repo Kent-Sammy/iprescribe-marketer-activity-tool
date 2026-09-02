@@ -96,6 +96,11 @@ export function ReportsTable({
                   <div className="text-xs text-muted-foreground">
                     {CONTACT_ROLE_LABELS[report.contactRole]}
                   </div>
+                  {report.contactPhone ? (
+                    <div className="text-xs text-muted-foreground">
+                      {report.contactPhone}
+                    </div>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <OutcomeBadge outcome={report.outcome} />

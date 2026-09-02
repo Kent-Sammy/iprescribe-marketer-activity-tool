@@ -14,7 +14,6 @@ import {
   FollowUpBadge,
   OutcomeBadge,
 } from "@/components/shared/badges";
-import { CONTACT_ROLE_LABELS } from "@/lib/types";
 import { formatDate, formatDateTime, formatTime } from "@/lib/datetime";
 import { isFollowUpOpen } from "@/lib/reporting";
 import {
@@ -109,6 +108,18 @@ export function ReportDetail({ reportId, context }: ReportDetailProps) {
                   <ContactRoleBadge role={report.contactRole} />
                 </div>
               </Field>
+              <Field label="Phone number">
+                {report.contactPhone ? (
+                  <a
+                    href={`tel:${report.contactPhone}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {report.contactPhone}
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </Field>
               <Field label="Marketer">
                 {context === "admin" && marketer ? (
                   <Link
@@ -122,10 +133,37 @@ export function ReportDetail({ reportId, context }: ReportDetailProps) {
                 )}
               </Field>
               <Field label="Submitted">{formatDateTime(report.createdAt)}</Field>
-              <Field label="Contact role">
-                {CONTACT_ROLE_LABELS[report.contactRole]}
-              </Field>
             </dl>
+
+            {report.ownerName || report.ownerPhone || report.ownerEmail ? (
+              <dl className="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 border-t border-border pt-6 sm:grid-cols-2">
+                {report.ownerName ? (
+                  <Field label="Facility owner">
+                    <span className="font-medium">{report.ownerName}</span>
+                  </Field>
+                ) : null}
+                {report.ownerPhone ? (
+                  <Field label="Owner phone">
+                    <a
+                      href={`tel:${report.ownerPhone}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {report.ownerPhone}
+                    </a>
+                  </Field>
+                ) : null}
+                {report.ownerEmail ? (
+                  <Field label="Owner email">
+                    <a
+                      href={`mailto:${report.ownerEmail}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {report.ownerEmail}
+                    </a>
+                  </Field>
+                ) : null}
+              </dl>
+            ) : null}
 
             <div className="mt-6">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

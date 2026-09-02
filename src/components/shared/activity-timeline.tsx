@@ -68,6 +68,7 @@ export function ActivityTimeline({
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {report.contactName} — {CONTACT_ROLE_LABELS[report.contactRole]}
+                      {report.contactPhone ? ` · ${report.contactPhone}` : ""}
                     </p>
                     {report.remarks ? (
                       <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">

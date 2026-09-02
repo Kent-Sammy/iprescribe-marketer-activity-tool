@@ -75,7 +75,13 @@ export interface Report {
   /** Facility type copied at submit time so history stays accurate */
   facilityTypeSnapshot: FacilityType;
   contactName: string;
+  /** Phone number of the person contacted — required, used for follow-up. */
+  contactPhone: string;
   contactRole: ContactRole;
+  /** Optional facility owner — a DIFFERENT contact from the person contacted. */
+  ownerName?: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
   outcome: Outcome;
   followUpRequired: boolean;
   /** ISO date (yyyy-mm-dd) when a follow-up is due */

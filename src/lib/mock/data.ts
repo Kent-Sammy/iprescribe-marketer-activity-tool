@@ -314,6 +314,29 @@ const CONTACT_NAMES = [
   "Fatima Sani",
 ];
 
+const OWNER_NAMES = [
+  "Chief Adewale Ogun",
+  "Mrs. Patience Eze",
+  "Alhaji Sani Mohammed",
+  "Dr. Ibrahim Lawal",
+  "Mr. Emeka Obiora",
+  "Mrs. Yetunde Coker",
+];
+
+/** Nigerian-style mobile number, e.g. "+234 803 123 4567". */
+function randomPhone(): string {
+  let n = "";
+  for (let i = 0; i < 10; i++) n += Math.floor(rng() * 10);
+  return `+234 ${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.|\.$/g, "");
+}
+
 const REMARKS_BY_OUTCOME: Record<Outcome, string[]> = {
   INTERESTED: [
     "Walked the pharmacist through the product range. They asked for a price list and samples before committing.",
@@ -415,13 +438,21 @@ function buildReports(marketers: Marketer[], facilities: Facility[]): Report[] {
 
         const contactRole = pick(CONTACT_ROLE_BY_FACILITY[facility.type]);
 
+        // Some visits also capture the facility owner (a different contact).
+        const hasOwner = chance(0.35);
+        const ownerName = hasOwner ? pick(OWNER_NAMES) : undefined;
+
         reports.push({
           id: `rep_${String(++counter).padStart(4, "0")}`,
           marketerId: marketer.id,
           facilityId: facility.id,
           facilityTypeSnapshot: facility.type,
           contactName: pick(CONTACT_NAMES),
+          contactPhone: randomPhone(),
           contactRole,
+          ownerName,
+          ownerPhone: ownerName ? randomPhone() : undefined,
+          ownerEmail: ownerName && chance(0.6) ? `${slugify(ownerName)}@example.com` : undefined,
           outcome,
           followUpRequired,
           followUpDate,

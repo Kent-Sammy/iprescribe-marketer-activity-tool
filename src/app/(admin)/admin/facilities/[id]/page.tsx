@@ -175,6 +175,11 @@ function FacilityDetailInner({ id }: { id: string }) {
                       <div className="mt-0.5">
                         <ContactRoleBadge role={r.contactRole} />
                       </div>
+                      {r.contactPhone ? (
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {r.contactPhone}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <OutcomeBadge outcome={r.outcome} />

@@ -54,7 +54,11 @@ interface FormState {
   facilityType: FacilityType | null;
   facilityId: string | null;
   contactName: string;
+  contactPhone: string;
   contactRole: ContactRole | "";
+  ownerName: string;
+  ownerPhone: string;
+  ownerEmail: string;
   location: GeoLocation | null;
   outcome: Outcome | "";
   followUpDate: string;
@@ -65,7 +69,11 @@ const INITIAL: FormState = {
   facilityType: null,
   facilityId: null,
   contactName: "",
+  contactPhone: "",
   contactRole: "",
+  ownerName: "",
+  ownerPhone: "",
+  ownerEmail: "",
   location: null,
   outcome: "",
   followUpDate: "",
@@ -82,6 +90,8 @@ export function ReportForm() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
+  /** Set when the user tries to advance/submit an incomplete step. */
+  const [triedNext, setTriedNext] = useState(false);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]): void =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -95,7 +105,11 @@ export function ReportForm() {
       case 1:
         return form.facilityId !== null;
       case 2:
-        return form.contactName.trim().length > 0 && form.contactRole !== "";
+        return (
+          form.contactName.trim().length > 0 &&
+          form.contactPhone.trim().length > 0 &&
+          form.contactRole !== ""
+        );
       case 3:
         return form.location !== null;
       case 4:
@@ -111,22 +125,41 @@ export function ReportForm() {
   }, [step, form]);
 
   function next() {
-    if (stepValid && step < STEPS.length - 1) setStep((s) => s + 1);
+    if (!stepValid) {
+      setTriedNext(true);
+      return;
+    }
+    setTriedNext(false);
+    if (step < STEPS.length - 1) setStep((s) => s + 1);
   }
   function back() {
+    setTriedNext(false);
     if (step > 0) setStep((s) => s - 1);
   }
 
   function submit() {
-    if (!form.facilityType || !form.facilityId || !form.location || form.outcome === "")
+    if (
+      !form.facilityType ||
+      !form.facilityId ||
+      !form.location ||
+      form.outcome === "" ||
+      form.contactName.trim() === "" ||
+      form.contactPhone.trim() === "" ||
+      form.contactRole === ""
+    ) {
       return;
+    }
     setSubmitting(true);
     const report = addReport({
       marketerId,
       facilityId: form.facilityId,
       facilityTypeSnapshot: form.facilityType,
       contactName: form.contactName,
+      contactPhone: form.contactPhone,
       contactRole: form.contactRole as ContactRole,
+      ownerName: form.ownerName,
+      ownerPhone: form.ownerPhone,
+      ownerEmail: form.ownerEmail,
       outcome: form.outcome,
       followUpDate:
         form.outcome === "FOLLOW_UP_REQUIRED" ? form.followUpDate : undefined,
@@ -206,21 +239,51 @@ export function ReportForm() {
           {step === 2 ? (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="contact-name">Person contacted</Label>
+                <Label htmlFor="contact-name">
+                  Person contacted <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="contact-name"
                   value={form.contactName}
                   onChange={(e) => set("contactName", e.target.value)}
                   placeholder="Full name"
+                  aria-invalid={triedNext && form.contactName.trim() === ""}
                 />
+                {triedNext && form.contactName.trim() === "" ? (
+                  <p className="text-xs text-destructive">Name is required.</p>
+                ) : null}
               </div>
               <div className="space-y-1.5">
-                <Label>Their role</Label>
+                <Label htmlFor="contact-phone">
+                  Phone number <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="contact-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={form.contactPhone}
+                  onChange={(e) => set("contactPhone", e.target.value)}
+                  placeholder="+234 ..."
+                  aria-invalid={triedNext && form.contactPhone.trim() === ""}
+                />
+                {triedNext && form.contactPhone.trim() === "" ? (
+                  <p className="text-xs text-destructive">Phone number is required.</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Used to follow up with this contact after the visit.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  Their role <span className="text-destructive">*</span>
+                </Label>
                 <Select
                   value={form.contactRole}
                   onValueChange={(v) => set("contactRole", v as ContactRole)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-invalid={triedNext && form.contactRole === ""}>
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
@@ -231,6 +294,45 @@ export function ReportForm() {
                     ))}
                   </SelectContent>
                 </Select>
+                {triedNext && form.contactRole === "" ? (
+                  <p className="text-xs text-destructive">Contact role is required.</p>
+                ) : null}
+              </div>
+
+              {/* Optional — the facility owner is a different contact. */}
+              <div className="space-y-3 rounded-md border border-border p-3">
+                <p className="text-sm font-medium">Facility owner (optional)</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="owner-name">Owner name</Label>
+                  <Input
+                    id="owner-name"
+                    value={form.ownerName}
+                    onChange={(e) => set("ownerName", e.target.value)}
+                    placeholder="Full name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="owner-phone">Owner phone number</Label>
+                  <Input
+                    id="owner-phone"
+                    type="tel"
+                    inputMode="tel"
+                    value={form.ownerPhone}
+                    onChange={(e) => set("ownerPhone", e.target.value)}
+                    placeholder="+234 ..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="owner-email">Owner email address</Label>
+                  <Input
+                    id="owner-email"
+                    type="email"
+                    inputMode="email"
+                    value={form.ownerEmail}
+                    onChange={(e) => set("ownerEmail", e.target.value)}
+                    placeholder="name@example.com"
+                  />
+                </div>
               </div>
             </div>
           ) : null}
@@ -313,6 +415,22 @@ export function ReportForm() {
                   {form.contactName} —{" "}
                   {form.contactRole ? CONTACT_ROLE_LABELS[form.contactRole] : "—"}
                 </Row>
+                <Row label="Phone number">{form.contactPhone || "—"}</Row>
+                {form.ownerName.trim() ||
+                form.ownerPhone.trim() ||
+                form.ownerEmail.trim() ? (
+                  <>
+                    {form.ownerName.trim() ? (
+                      <Row label="Facility owner">{form.ownerName}</Row>
+                    ) : null}
+                    {form.ownerPhone.trim() ? (
+                      <Row label="Owner phone">{form.ownerPhone}</Row>
+                    ) : null}
+                    {form.ownerEmail.trim() ? (
+                      <Row label="Owner email">{form.ownerEmail}</Row>
+                    ) : null}
+                  </>
+                ) : null}
                 <Row label="Location">
                   {form.location
                     ? `${form.location.address ?? "Captured"} (±${form.location.accuracy} m)`
@@ -334,6 +452,11 @@ export function ReportForm() {
           ) : null}
 
           {/* -------- nav -------- */}
+          {triedNext && !stepValid && step !== 2 ? (
+            <p className="text-xs text-destructive">
+              Please complete the required fields to continue.
+            </p>
+          ) : null}
           <div className="flex items-center justify-between pt-1">
             <Button
               type="button"
@@ -345,12 +468,16 @@ export function ReportForm() {
               Back
             </Button>
             {step < STEPS.length - 1 ? (
-              <Button type="button" onClick={next} disabled={!stepValid}>
+              <Button type="button" onClick={next} disabled={submitting}>
                 Next
                 <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button type="button" onClick={submit} disabled={submitting}>
+              <Button
+                type="button"
+                onClick={submit}
+                disabled={submitting || !stepValid}
+              >
                 <Check className="h-4 w-4" />
                 {submitting ? "Submitting…" : "Submit report"}
               </Button>

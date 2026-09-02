@@ -117,6 +117,7 @@ export default function MarketerDashboardPage() {
                         <p className="mt-1 text-xs text-muted-foreground">
                           Due {r.followUpDate ? formatDate(r.followUpDate) : "—"} ·{" "}
                           {r.contactName}
+                          {r.contactPhone ? ` · ${r.contactPhone}` : ""}
                         </p>
                       </Link>
                     </li>
