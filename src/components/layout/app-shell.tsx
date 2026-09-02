@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,12 +19,13 @@ interface AppShellProps {
 
 export function AppShell({ nav, homeHref, children }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useCurrentUser();
   const { signOut } = useAuthActions();
 
   function handleSignOut() {
-    // Clerk clears the session and redirects to /login.
-    void signOut();
+    signOut();
+    router.push("/login");
   }
 
   return (

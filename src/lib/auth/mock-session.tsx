@@ -1,31 +1,37 @@
 "use client";
 
 /**
- * Session adapter over Clerk.
+ * MOCK session — frontend-prototype phase.
  *
- * The rest of the app imports `useCurrentUser()` / `useSession()` /
- * `useAuthActions()` from here and expects the `SessionUser` shape below. This
- * module maps Clerk's `useUser()` / `useAuth()` / `useClerk()` onto that shape so
- * no feature component had to change when real auth landed.
+ * There is NO real authentication here. The login page calls loginAsMarketer()
+ * or loginAsAdmin() and navigates; the chosen role is kept in localStorage so
+ * the app shell renders the right label and role-aware UI works. No account, no
+ * password, no verification, no route guards.
  *
- * Role model: Clerk `publicMetadata.role === "admin"` -> ADMIN, otherwise
- * MARKETER. Admin accounts are stamped in the Clerk dashboard; marketer sign-up
- * needs no role handling.
- *
- * (Filename kept as `mock-session` to avoid churning ~9 imports; it is no longer
- * mock.)
+ * To reintroduce real auth later: swap this module back to a Clerk adapter,
+ * re-add <ClerkProvider> in app/layout.tsx, and restore src/middleware.ts.
+ * The exported hook names / `SessionUser` shape are kept stable so feature
+ * components don't need to change.
  */
 
-import type { ReactNode } from "react";
-import { useAuth, useClerk, useUser } from "@clerk/nextjs";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Role } from "@/lib/types";
+import { MOCK_MARKETERS } from "@/lib/mock/data";
 
 export interface SessionUser {
   id: string;
   name: string;
   email: string;
   role: Role;
-  /** Present only for marketers (equals the Clerk user id). */
+  /** Present only for marketers. */
   marketerId?: string;
 }
 
@@ -34,73 +40,110 @@ export interface Session {
 }
 
 type Status = "authenticated" | "loading" | "unauthenticated";
+type Kind = "marketer" | "admin";
 
-function roleFrom(publicMetadata: unknown): Role {
-  const role = (publicMetadata as { role?: string } | null | undefined)?.role;
-  return role === "admin" ? "ADMIN" : "MARKETER";
-}
+const STORAGE_KEY = "mat_prototype_session_v1";
+const DEFAULT_MARKETER = MOCK_MARKETERS[0];
 
-type ClerkUserLike = {
-  id: string;
-  fullName: string | null;
-  firstName: string | null;
-  primaryEmailAddress: { emailAddress: string } | null;
-  publicMetadata: unknown;
-  unsafeMetadata: unknown;
-};
-
-function toSessionUser(user: ClerkUserLike): SessionUser {
-  const role = roleFrom(user.publicMetadata);
-  const email = user.primaryEmailAddress?.emailAddress ?? "";
-  const unsafeName = (user.unsafeMetadata as { fullName?: string } | null | undefined)
-    ?.fullName;
-  const name = user.fullName || unsafeName || user.firstName || email || "User";
+function marketerSession(): Session {
   return {
-    id: user.id,
-    name,
-    email,
-    role,
-    marketerId: role === "MARKETER" ? user.id : undefined,
+    user: {
+      id: DEFAULT_MARKETER.id,
+      name: DEFAULT_MARKETER.name,
+      email: DEFAULT_MARKETER.email,
+      role: "MARKETER",
+      marketerId: DEFAULT_MARKETER.id,
+    },
   };
 }
 
-const FALLBACK_USER: SessionUser = {
-  id: "",
-  name: "",
-  email: "",
-  role: "MARKETER",
-};
+function adminSession(): Session {
+  return {
+    user: {
+      id: "admin",
+      name: "Admin",
+      email: "admin@example.com",
+      role: "ADMIN",
+    },
+  };
+}
 
-/**
- * Kept for backwards compatibility. Auth is provided by <ClerkProvider> in
- * app/layout.tsx, so this is a passthrough.
- */
+const DEFAULT_SESSION = marketerSession();
+
+interface AuthContextValue {
+  session: Session;
+  status: Status;
+  loginAsMarketer: () => void;
+  loginAsAdmin: () => void;
+  signOut: () => void;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
 export function MockSessionProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  const [session, setSession] = useState<Session>(DEFAULT_SESSION);
+  const [status, setStatus] = useState<Status>("loading");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw === "admin") setSession(adminSession());
+      else if (raw === "marketer") setSession(marketerSession());
+    } catch {
+      // ignore — fall back to default
+    }
+    setStatus("authenticated");
+  }, []);
+
+  const persist = useCallback((kind: Kind) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, kind);
+    } catch {
+      // ignore
+    }
+    setSession(kind === "admin" ? adminSession() : marketerSession());
+  }, []);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      session,
+      status,
+      loginAsMarketer: () => persist("marketer"),
+      loginAsAdmin: () => persist("admin"),
+      signOut: () => {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+        setSession(DEFAULT_SESSION);
+      },
+    }),
+    [session, status, persist],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+function useAuthContext(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useSession/useCurrentUser must be used inside <MockSessionProvider>");
+  }
+  return ctx;
 }
 
 /** next-auth-compatible shape: `{ data, status }`. */
-export function useSession(): { data: Session | null; status: Status } {
-  const { isLoaded } = useAuth();
-  const { user } = useUser();
-  if (!isLoaded) return { data: null, status: "loading" };
-  if (!user) return { data: null, status: "unauthenticated" };
-  return { data: { user: toSessionUser(user as unknown as ClerkUserLike) }, status: "authenticated" };
+export function useSession(): { data: Session; status: Status } {
+  const { session, status } = useAuthContext();
+  return { data: session, status };
 }
 
-/**
- * The current user. On protected routes the middleware guarantees a session, so
- * once Clerk has loaded this is always the real user; during the brief load it
- * returns a neutral marketer placeholder.
- */
 export function useCurrentUser(): SessionUser {
-  const { user } = useUser();
-  return user ? toSessionUser(user as unknown as ClerkUserLike) : FALLBACK_USER;
+  return useAuthContext().session.user;
 }
 
 export function useAuthActions() {
-  const { signOut } = useClerk();
-  return {
-    signOut: () => signOut({ redirectUrl: "/login" }),
-  };
+  const { loginAsMarketer, loginAsAdmin, signOut } = useAuthContext();
+  return { loginAsMarketer, loginAsAdmin, signOut };
 }

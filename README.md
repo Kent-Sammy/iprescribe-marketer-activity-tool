@@ -5,11 +5,12 @@ facilities (pharmacies, hospitals/clinics, laboratories), and for the admin team
 to see **what each marketer did, where they went, who they met, and what
 happened**.
 
-> **Status.** Authentication is **real** (Clerk): marketer sign-up + sign-in,
-> admin sign-in, role-based route protection via middleware. The rest of the app
-> (facilities, reports data) still runs on a per-browser **mock store** until the
-> data backend (Postgres + Prisma + Google geocoding) lands — see
-> [Roadmap](#roadmap).
+> **Status: frontend prototype.** Authentication is **mocked** and there are **no
+> route guards** — every screen is freely navigable for demos and developer
+> hand-off. Data (facilities, reports) runs on a per-browser mock store. Real
+> auth (Clerk) and the data backend (Postgres + Prisma + Google geocoding) are
+> later phases — see [Roadmap](#roadmap). `@clerk/nextjs` is kept as a dependency
+> for that phase but is not wired into the app right now.
 
 ---
 
@@ -43,55 +44,25 @@ pnpm lint      # eslint
 pnpm format    # prettier --write .
 ```
 
-## Authentication & access control
+## Authentication (mocked)
 
-Auth is handled by **Clerk**. See [Environment variables](#environment-variables)
-for the required keys and the one dashboard setting.
+This phase is a **frontend prototype**. There is **no real authentication and no
+route protection** — every screen is reachable directly by URL.
 
-- **`/login`** — one page, two entry points:
-  - **Marketer** — sign in, or **Create an account** (email + password, email-code
-    verification). Public Clerk sign-up.
-  - **Admin** — **sign-in only**. No "create account" link, no way to sign up an
-    admin. After a successful sign-in the app checks the Clerk role; a
-    non-admin sees *"You don't have admin access"* and is offered their own
-    dashboard instead — access to `/admin` is never granted.
-- **Roles** come from Clerk `publicMetadata.role`. `"admin"` ⇒ admin; anything
-  else (including every self-service sign-up) ⇒ marketer. Identity is decided by
-  this role, never by "does the email exist".
-- **Admin accounts are provisioned in the Clerk dashboard only** — see
-  [Creating the first admin](#creating-the-first-admin).
-- Server-side protection, two layers:
-  - **`src/middleware.ts`** — every request: unauthenticated → `/login`;
-    non-admin on `/admin/*` → `/dashboard`; admin on the marketer workspace →
-    `/admin`.
-  - **`src/app/(admin)/admin/layout.tsx`** — a server component that re-checks
-    the Clerk role with `auth()` and redirects non-admins before any admin page
-    renders (defense in depth; not just hidden UI).
-- After login: marketer → `/dashboard`, admin → `/admin`.
+- **`/login`** — a visual login screen with a **Marketer / Admin** toggle:
+  - **Marketer** — *Log in* (any/no input) → `/dashboard`. Or **Create an
+    account** → dummy signup form → *Create account* → `/dashboard`. No OTP, no
+    email verification, no account.
+  - **Admin** — *Log in as Admin* (any/no input) → `/admin`. No signup option, no
+    account required, no "couldn't find your account".
+- The chosen role is stored in `localStorage` (`src/lib/auth/mock-session.tsx`)
+  only so the top bar shows the right label; it does not gate anything.
+- **No `middleware.ts`, no `<ClerkProvider>`, no role checks.** `@clerk/nextjs`
+  stays in `package.json` for the future auth phase but is not imported anywhere.
 
-### Creating the first admin
-
-There is no bootstrap admin and no admin sign-up, so create it by hand once:
-
-1. **Clerk Dashboard → Users → Create user** (or invite). Set the email +
-   password you'll use to sign in. (If you want to reuse an account that already
-   signed up as a marketer, just select that user instead.)
-2. Open the user → **Metadata → Public** → set:
-   ```json
-   { "role": "admin" }
-   ```
-   Save. (This is `publicMetadata` — editable only from the dashboard/Backend
-   API, never by the user.)
-3. Make sure the session-token claim from
-   [Environment variables](#environment-variables) is configured, then go to
-   `/login`, choose **Admin**, and sign in. You land on `/admin`.
-
-Repeat step 1–2 for any further admins. Everyone else stays a marketer.
-
-Facilities/reports still use a per-browser mock store (`src/lib/mock/`). Submitted
+Facilities/reports use a per-browser mock store (`src/lib/mock/`). Submitted
 reports persist to `localStorage`; **Reset demo data** (top bar) restores the
-seed. A brand-new marketer account starts with no reports of its own; the admin
-portal shows the full seeded dataset.
+seed.
 
 ### Screens
 
@@ -107,11 +78,10 @@ daily, `?date=`), `/admin/daily`, `/admin/reports`, `/admin/reports/[id]`,
 ```
 src/
   app/
-    (auth)/login/              # Clerk sign-in / marketer sign-up
+    (auth)/login/              # mock login / signup (no real auth)
     (marketer)/                # marketer shell + screens
     (admin)/admin/             # admin shell + screens
-    layout.tsx, providers.tsx  # root layout (<ClerkProvider>) + client providers
-  middleware.ts                # Clerk auth + role-based route protection
+    layout.tsx, providers.tsx  # root layout + client providers
   components/
     ui/                        # shadcn primitives
     shared/                    # StatCard, badges, timelines, tables, report detail
@@ -124,34 +94,20 @@ src/
     reporting.ts               # pure aggregation/filtering (future service-layer logic)
     geocoding.ts               # MOCK reverse geocoding (swap for Google later)
     nav.ts                     # nav config
-    auth/mock-session.tsx      # session adapter over Clerk (name kept for import stability)
+    auth/mock-session.tsx      # MOCK session (localStorage role only, no guards)
     mock/
       data.ts                  # seed marketers / facilities / reports
       store.tsx                # in-memory + localStorage data store
-  types/globals.d.ts           # Clerk session-claim types
+  types/globals.d.ts           # session-claim types (dormant — for the future Clerk phase)
 ```
 
 ## Environment variables
 
-Set these in **Vercel → Project → Settings → Environment Variables** (and in a
-local `.env.local`, copied from `.env.example`):
+**None are required in this phase.** `npm run build`, local dev, and the Vercel
+deploy all work with no env vars — auth is mocked and the data is a mock store.
 
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ✅ | Clerk dashboard → API keys. `pk_test_…` for Preview/Dev, `pk_live_…` for Production. The build fails without it. |
-| `CLERK_SECRET_KEY` | ✅ | Same page. `sk_test_…` / `sk_live_…`. Server-only. |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | ✅ | `/login` |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | ✅ | `/login` |
-
-**One required Clerk dashboard setting** — *Sessions → Customize session token* →
-add this claim so middleware can read the role without an API call:
-
-```json
-{ "metadata": "{{user.public_metadata}}" }
-```
-
-To make an **admin**: Clerk dashboard → Users → (create/select user) → Metadata →
-Public → `{ "role": "admin" }`.
+`.env.example` still lists the Clerk / Postgres / geocoding variables so they are
+ready for the phases that reintroduce real auth and a data backend.
 
 ## What is still mocked, and how to replace it
 
@@ -174,8 +130,9 @@ Public → `{ "role": "admin" }`.
 
 ## Roadmap
 
-1. ✅ Frontend on mock data
-2. ✅ Real auth + role-based access control (Clerk)
+1. ✅ Frontend prototype on mock data + mock auth (current)
+2. Real auth + role-based access control (Clerk) — middleware, `<ClerkProvider>`,
+   role checks. `@clerk/nextjs` is already a dependency.
 3. Data layer — Prisma schema, migrations, seed (Neon Postgres)
 4. Wire Submit Report + dashboards to real data (Server Actions / Components)
 5. Admin drill-downs on real data
@@ -188,6 +145,4 @@ Public → `{ "role": "admin" }`.
 - `next.config.mjs` currently sets `eslint.ignoreDuringBuilds: true` so a stray
   lint warning doesn’t block `next build`. Run `pnpm lint` directly; re-enable
   build-time lint when CI enforces it.
-- The Clerk keys (see [Environment variables](#environment-variables)) are
-  required for `next build` and to run the app. The Postgres/geocoding vars in
-  `.env.example` are for later phases and are not needed yet.
+- No environment variables are needed to build or run this phase.
