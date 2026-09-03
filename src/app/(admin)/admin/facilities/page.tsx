@@ -26,7 +26,7 @@ import { FacilityTypeBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FACILITY_TYPE_OPTIONS, type FacilityType } from "@/lib/types";
 import { byNewest, formatDate } from "@/lib/datetime";
-import { useFacilities, useHydrated, useReports } from "@/lib/mock/store";
+import { useFacilities, useHydrated, useReports } from "@/lib/data/store";
 
 const ALL = "ALL";
 

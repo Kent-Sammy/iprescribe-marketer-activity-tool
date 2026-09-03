@@ -16,7 +16,7 @@ import { PageLoading } from "@/components/shared/loading";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DailyActivityView } from "@/components/admin/daily-activity-view";
 import { todayYMD } from "@/lib/datetime";
-import { useHydrated, useMarketers } from "@/lib/mock/store";
+import { useHydrated, useMarketers } from "@/lib/data/store";
 
 function DailyInner() {
   const hydrated = useHydrated();

@@ -23,7 +23,7 @@ import {
   type Outcome,
 } from "@/lib/types";
 import { filterReports, type ReportFilters } from "@/lib/reporting";
-import { useFacilities, useHydrated, useMarketers, useReports } from "@/lib/mock/store";
+import { useFacilities, useHydrated, useMarketers, useReports } from "@/lib/data/store";
 
 const ALL = "ALL";
 const PAGE_SIZE = 25;

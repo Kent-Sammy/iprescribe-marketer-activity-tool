@@ -18,16 +18,15 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { OutcomeBadge } from "@/components/shared/badges";
 import { formatDate, formatDateLong } from "@/lib/datetime";
 import { marketerDashboardStats, isFollowUpOpen } from "@/lib/reporting";
-import { useFacilities, useHydrated, useReports } from "@/lib/mock/store";
-import { useCurrentUser } from "@/lib/auth/mock-session";
-import { MOCK_MARKETERS } from "@/lib/mock/data";
+import { useFacilities, useHydrated, useReports } from "@/lib/data/store";
+import { useCurrentUser } from "@/lib/auth/session";
 
 export default function MarketerDashboardPage() {
   const hydrated = useHydrated();
   const reports = useReports();
   const facilities = useFacilities();
   const user = useCurrentUser();
-  const marketerId = user.marketerId ?? MOCK_MARKETERS[0].id;
+  const marketerId = user.marketerId ?? user.id;
 
   if (!hydrated) return <PageLoading />;
 

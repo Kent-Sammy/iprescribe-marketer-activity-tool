@@ -14,7 +14,7 @@ import { TableLoading } from "@/components/shared/loading";
 import { StatusBadge } from "@/components/shared/badges";
 import { formatRelative } from "@/lib/datetime";
 import { marketerRows } from "@/lib/reporting";
-import { useHydrated, useMarketers, useReports } from "@/lib/mock/store";
+import { useHydrated, useMarketers, useReports } from "@/lib/data/store";
 
 export default function AdminMarketersPage() {
   const router = useRouter();

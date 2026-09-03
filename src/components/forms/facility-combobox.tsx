@@ -20,8 +20,8 @@ import {
   type Facility,
   type FacilityType,
 } from "@/lib/types";
-import { useMockStore } from "@/lib/mock/store";
-import { useCurrentUser } from "@/lib/auth/mock-session";
+import { useDataStore } from "@/lib/data/store";
+import { ApiError } from "@/lib/api/client";
 
 interface FacilityComboboxProps {
   facilities: Facility[];
@@ -36,10 +36,11 @@ export function FacilityCombobox({
   value,
   onChange,
 }: FacilityComboboxProps) {
-  const { addFacility } = useMockStore();
-  const user = useCurrentUser();
+  const { addFacility } = useDataStore();
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   // new-facility form state
   const [newName, setNewName] = useState("");
@@ -63,24 +64,34 @@ export function FacilityCombobox({
     setAdding(true);
   }
 
-  function confirmAdd() {
-    if (!newName.trim()) return;
-    const facility = addFacility({
-      name: newName,
-      type: facilityType,
-      address: newAddress || undefined,
-      contactPersonName: newContactName || undefined,
-      contactPersonRole: newContactRole || undefined,
-      contactPhone: newContactPhone || undefined,
-      createdById: user.marketerId ?? user.id,
-    });
-    onChange(facility.id);
-    setAdding(false);
-    setQuery("");
-    setNewAddress("");
-    setNewContactName("");
-    setNewContactRole("");
-    setNewContactPhone("");
+  // The API stamps the creating marketer from the token, so no id is sent here.
+  async function confirmAdd() {
+    if (!newName.trim() || saving) return;
+    setSaving(true);
+    setAddError(null);
+    try {
+      const facility = await addFacility({
+        name: newName,
+        type: facilityType,
+        address: newAddress || undefined,
+        contactPersonName: newContactName || undefined,
+        contactPersonRole: newContactRole || undefined,
+        contactPhone: newContactPhone || undefined,
+      });
+      onChange(facility.id);
+      setAdding(false);
+      setQuery("");
+      setNewAddress("");
+      setNewContactName("");
+      setNewContactRole("");
+      setNewContactPhone("");
+    } catch (e) {
+      setAddError(
+        e instanceof ApiError ? e.displayMessage : "Couldn't add the facility. Try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (selected) {
@@ -172,15 +183,29 @@ export function FacilityCombobox({
             placeholder="+234 ..."
           />
         </div>
+        {addError ? (
+          <p
+            role="alert"
+            className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {addError}
+          </p>
+        ) : null}
         <div className="flex gap-2">
-          <Button type="button" size="sm" onClick={confirmAdd} disabled={!newName.trim()}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void confirmAdd()}
+            disabled={!newName.trim() || saving}
+          >
             <Check className="h-4 w-4" />
-            Add &amp; select
+            {saving ? "Adding…" : "Add & select"}
           </Button>
           <Button
             type="button"
             size="sm"
             variant="ghost"
+            disabled={saving}
             onClick={() => setAdding(false)}
           >
             Cancel

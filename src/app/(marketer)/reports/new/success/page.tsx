@@ -13,7 +13,7 @@ import {
   FACILITY_TYPE_LABELS,
 } from "@/lib/types";
 import { formatDateTime } from "@/lib/datetime";
-import { useFacility, useHydrated, useReport } from "@/lib/mock/store";
+import { useFacility, useHydrated, useReport } from "@/lib/data/store";
 
 function SuccessInner() {
   const hydrated = useHydrated();

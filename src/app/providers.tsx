@@ -1,20 +1,20 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { MockSessionProvider } from "@/lib/auth/mock-session";
-import { MockDataProvider } from "@/lib/mock/store";
+import { SessionProvider } from "@/lib/auth/session";
+import { DataProvider } from "@/lib/data/store";
 
 /**
  * Client provider tree.
  *
- * FRONTEND-PROTOTYPE PHASE: authentication is mocked (see mock-session.tsx) and
- * there are no route guards. When real auth returns, re-add <ClerkProvider> here
- * (and re-add src/middleware.ts).
+ * <SessionProvider> restores the API session from the stored token pair;
+ * <DataProvider> loads the collections that session is allowed to see, so it
+ * has to sit inside it.
  */
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <MockSessionProvider>
-      <MockDataProvider>{children}</MockDataProvider>
-    </MockSessionProvider>
+    <SessionProvider>
+      <DataProvider>{children}</DataProvider>
+    </SessionProvider>
   );
 }

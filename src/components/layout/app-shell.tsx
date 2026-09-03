@@ -4,11 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { isNavItemActive, type NavItem } from "@/lib/nav";
-import { useAuthActions, useCurrentUser } from "@/lib/auth/mock-session";
-import { ResetDemoDataButton } from "@/components/layout/reset-demo-data";
+import { useAuthActions, useCurrentUser } from "@/lib/auth/session";
+import { useDataStore } from "@/lib/data/store";
 
 interface AppShellProps {
   nav: NavItem[];
@@ -22,9 +21,10 @@ export function AppShell({ nav, homeHref, children }: AppShellProps) {
   const router = useRouter();
   const user = useCurrentUser();
   const { signOut } = useAuthActions();
+  const { error, refresh } = useDataStore();
 
-  function handleSignOut() {
-    signOut();
+  async function handleSignOut() {
+    await signOut();
     router.push("/login");
   }
 
@@ -39,14 +39,8 @@ export function AppShell({ nav, homeHref, children }: AppShellProps) {
             </span>
             <span className="hidden sm:inline">Marketer Activity Tool</span>
           </Link>
-          <Badge tone="warning" className="hidden sm:inline-flex">
-            Demo
-          </Badge>
 
           <div className="ml-auto flex items-center gap-2">
-            <div className="hidden md:block">
-              <ResetDemoDataButton />
-            </div>
             <div className="hidden text-right sm:block">
               <p className="text-xs font-medium leading-tight">{user.name}</p>
               <p className="text-[11px] leading-tight text-muted-foreground">
@@ -91,7 +85,26 @@ export function AppShell({ nav, homeHref, children }: AppShellProps) {
         </aside>
 
         {/* ---------- Main content ---------- */}
-        <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
+        <main className="min-w-0 flex-1 pb-20 md:pb-0">
+          {/* A failed load must not read as "no activity yet". */}
+          {error ? (
+            <div
+              role="alert"
+              className="mb-4 flex flex-wrap items-center gap-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              <span className="min-w-0 flex-1">{error}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => void refresh()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : null}
+          {children}
+        </main>
       </div>
 
       {/* ---------- Mobile bottom nav ---------- */}

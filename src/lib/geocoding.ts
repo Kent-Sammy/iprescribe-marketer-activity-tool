@@ -1,51 +1,38 @@
 /**
- * Reverse geocoding — MOCK implementation.
+ * Reverse geocoding, via the API's Google-backed endpoint.
  *
- * The real version (Phase 8) will POST to a server route that calls the Google
- * Geocoding API with a secret key. Keep the signature stable so only the body of
- * `getAddressForCoords` changes.
+ * The Google key stays server-side — the browser only ever sends coordinates.
+ * Coordinates Google can't resolve are not an error: the report still saves,
+ * just without a street address, so this returns an empty address rather than
+ * throwing.
  */
 
-const LAGOS_AREAS = [
-  "Victoria Island",
-  "Ikoyi",
-  "Lekki Phase 1",
-  "Ikeja GRA",
-  "Yaba",
-  "Surulere",
-  "Lagos Island",
-  "Ajah",
-  "Maryland",
-  "Gbagada",
-];
-
-const STREETS = [
-  "Adeola Odeku St",
-  "Kingsway Rd",
-  "Admiralty Way",
-  "Herbert Macaulay Way",
-  "Oba Akran Ave",
-  "Awolowo Rd",
-  "Bourdillon Rd",
-  "Allen Ave",
-];
+import { apiFetch } from "@/lib/api/client";
 
 export interface ReverseGeocodeResult {
-  address: string;
+  address?: string;
 }
 
-/** Simulates a network round-trip and returns a plausible Lagos address. */
+interface ReverseGeocodePayload {
+  address: string | null;
+  place_id: string | null;
+}
+
 export async function getAddressForCoords(
   latitude: number,
   longitude: number,
 ): Promise<ReverseGeocodeResult> {
-  await new Promise((r) => setTimeout(r, 700));
-  // Deterministic-ish from the coordinates so retries are stable.
-  const seed = Math.abs(Math.round((latitude + longitude) * 1_000_000));
-  const number = (seed % 90) + 1;
-  const street = STREETS[seed % STREETS.length];
-  const area = LAGOS_AREAS[Math.floor(seed / 7) % LAGOS_AREAS.length];
-  return { address: `${number} ${street}, ${area}, Lagos, Nigeria` };
+  try {
+    const result = await apiFetch<ReverseGeocodePayload>(
+      "/v1/marketer/utils/reverse-geocode",
+      { query: { latitude, longitude } },
+    );
+    return { address: result?.address ?? undefined };
+  } catch {
+    // A geocoding outage must not block a submission — location capture only
+    // requires the coordinates.
+    return {};
+  }
 }
 
 /** Link to an external map for a set of coordinates (no embedded SDK in MVP). */

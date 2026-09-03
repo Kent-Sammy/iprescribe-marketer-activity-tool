@@ -27,9 +27,8 @@ import {
   type Outcome,
 } from "@/lib/types";
 import { todayYMD } from "@/lib/datetime";
-import { useFacilities, useMockStore } from "@/lib/mock/store";
-import { useCurrentUser } from "@/lib/auth/mock-session";
-import { MOCK_MARKETERS } from "@/lib/mock/data";
+import { useFacilities, useDataStore } from "@/lib/data/store";
+import { ApiError } from "@/lib/api/client";
 import { FacilityCombobox } from "@/components/forms/facility-combobox";
 import { LocationCapture } from "@/components/forms/location-capture";
 import { OutcomeBadge } from "@/components/shared/badges";
@@ -83,13 +82,12 @@ const INITIAL: FormState = {
 export function ReportForm() {
   const router = useRouter();
   const facilities = useFacilities();
-  const { addReport } = useMockStore();
-  const user = useCurrentUser();
-  const marketerId = user.marketerId ?? MOCK_MARKETERS[0].id;
+  const { addReport } = useDataStore();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   /** Set when the user tries to advance/submit an incomplete step. */
   const [triedNext, setTriedNext] = useState(false);
 
@@ -137,7 +135,9 @@ export function ReportForm() {
     if (step > 0) setStep((s) => s - 1);
   }
 
-  function submit() {
+  // The marketer, the visit timestamp and the facility-type snapshot are all
+  // set server-side, so none of them are sent from here.
+  async function submit() {
     if (
       !form.facilityType ||
       !form.facilityId ||
@@ -150,23 +150,29 @@ export function ReportForm() {
       return;
     }
     setSubmitting(true);
-    const report = addReport({
-      marketerId,
-      facilityId: form.facilityId,
-      facilityTypeSnapshot: form.facilityType,
-      contactName: form.contactName,
-      contactPhone: form.contactPhone,
-      contactRole: form.contactRole as ContactRole,
-      ownerName: form.ownerName,
-      ownerPhone: form.ownerPhone,
-      ownerEmail: form.ownerEmail,
-      outcome: form.outcome,
-      followUpDate:
-        form.outcome === "FOLLOW_UP_REQUIRED" ? form.followUpDate : undefined,
-      remarks: form.remarks,
-      location: form.location,
-    });
-    router.push(`/reports/new/success?id=${report.id}`);
+    setSubmitError(null);
+    try {
+      const report = await addReport({
+        facilityId: form.facilityId,
+        contactName: form.contactName,
+        contactPhone: form.contactPhone,
+        contactRole: form.contactRole as ContactRole,
+        ownerName: form.ownerName,
+        ownerPhone: form.ownerPhone,
+        ownerEmail: form.ownerEmail,
+        outcome: form.outcome,
+        followUpDate:
+          form.outcome === "FOLLOW_UP_REQUIRED" ? form.followUpDate : undefined,
+        remarks: form.remarks,
+        location: form.location,
+      });
+      router.push(`/reports/new/success?id=${report.id}`);
+    } catch (e) {
+      setSubmitError(
+        e instanceof ApiError ? e.displayMessage : "Couldn't submit the report. Try again.",
+      );
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -457,6 +463,14 @@ export function ReportForm() {
               Please complete the required fields to continue.
             </p>
           ) : null}
+          {submitError ? (
+            <p
+              role="alert"
+              className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {submitError}
+            </p>
+          ) : null}
           <div className="flex items-center justify-between pt-1">
             <Button
               type="button"
@@ -475,7 +489,7 @@ export function ReportForm() {
             ) : (
               <Button
                 type="button"
-                onClick={submit}
+                onClick={() => void submit()}
                 disabled={submitting || !stepValid}
               >
                 <Check className="h-4 w-4" />

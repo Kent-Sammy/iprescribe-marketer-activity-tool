@@ -9,7 +9,7 @@ import { ActivityTimeline } from "@/components/shared/activity-timeline";
 import { FACILITY_TYPE_LABELS, OUTCOME_LABELS } from "@/lib/types";
 import { formatDateLong } from "@/lib/datetime";
 import { filterReports, summariseReports } from "@/lib/reporting";
-import { useFacilities, useReports } from "@/lib/mock/store";
+import { useFacilities, useReports } from "@/lib/data/store";
 
 interface DailyActivityViewProps {
   marketerId: string;

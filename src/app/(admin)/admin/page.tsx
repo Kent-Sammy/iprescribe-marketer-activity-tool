@@ -19,7 +19,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { OutcomeBadge } from "@/components/shared/badges";
 import { formatDate, formatDateLong, isToday } from "@/lib/datetime";
 import { adminDashboardStats, isFollowUpOpen, isFollowUpOverdue } from "@/lib/reporting";
-import { useFacilities, useHydrated, useMarketers, useReports } from "@/lib/mock/store";
+import { useFacilities, useHydrated, useMarketers, useReports } from "@/lib/data/store";
 
 export default function AdminDashboardPage() {
   const hydrated = useHydrated();

@@ -10,67 +10,90 @@ import { getAddressForCoords, mapLink } from "@/lib/geocoding";
 
 type CaptureState = "idle" | "capturing" | "captured" | "error";
 
-const LAGOS_CENTER = { lat: 6.5244, lng: 3.3792 };
+/** Wait this long for a fix before giving up and offering a retry. */
+const GEOLOCATION_TIMEOUT_MS = 15_000;
 
 interface LocationCaptureProps {
   value: GeoLocation | null;
   onChange: (location: GeoLocation | null) => void;
 }
 
+function readPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("This device can't report its location."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: GEOLOCATION_TIMEOUT_MS,
+      maximumAge: 0,
+    });
+  });
+}
+
+function messageFor(error: unknown): string {
+  if (typeof GeolocationPositionError !== "undefined" && error instanceof GeolocationPositionError) {
+    switch (error.code) {
+      case error.PERMISSION_DENIED:
+        return "Location permission was denied. Enable location access for this site and try again — the report cannot be submitted without it.";
+      case error.POSITION_UNAVAILABLE:
+        return "Your location couldn't be determined. Move somewhere with a clearer signal and try again.";
+      case error.TIMEOUT:
+        return "Getting your location took too long. Try again.";
+    }
+  }
+  return error instanceof Error
+    ? error.message
+    : "Your location couldn't be captured. Try again.";
+}
+
 /**
- * MOCK location capture.
+ * Captures the marketer's GPS position for a report.
  *
- * The real component (Phase 3/8) will call navigator.geolocation.getCurrentPosition
- * and POST the coords to /api/geocode. The prop contract (value / onChange) and
- * the "must succeed before submit" behaviour stay the same.
+ * Location is mandatory: submission is blocked until this succeeds, and a
+ * denied or failed reading is a retry, never a save. The reverse-geocoded
+ * address is best-effort — a geocoding outage leaves the address blank but
+ * still yields a usable capture.
  */
 export function LocationCapture({ value, onChange }: LocationCaptureProps) {
   const [state, setState] = useState<CaptureState>(value ? "captured" : "idle");
-  const [simulateDenied, setSimulateDenied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function capture() {
     setState("capturing");
+    setError(null);
     onChange(null);
-    await new Promise((r) => setTimeout(r, 1400));
 
-    if (simulateDenied) {
+    let position: GeolocationPosition;
+    try {
+      position = await readPosition();
+    } catch (e) {
+      setError(messageFor(e));
       setState("error");
       return;
     }
 
-    const latitude = Number((LAGOS_CENTER.lat + (Math.random() * 2 - 1) * 0.02).toFixed(6));
-    const longitude = Number((LAGOS_CENTER.lng + (Math.random() * 2 - 1) * 0.02).toFixed(6));
-    const accuracy = Math.round(6 + Math.random() * 24);
-    const capturedAt = new Date().toISOString();
+    const { latitude, longitude, accuracy } = position.coords;
+    const { address } = await getAddressForCoords(latitude, longitude);
 
-    let address: string | undefined;
-    try {
-      address = (await getAddressForCoords(latitude, longitude)).address;
-    } catch {
-      address = undefined;
-    }
-
-    onChange({ latitude, longitude, accuracy, capturedAt, address });
+    onChange({
+      latitude,
+      longitude,
+      accuracy: Math.round(accuracy),
+      capturedAt: new Date(position.timestamp).toISOString(),
+      address,
+    });
     setState("captured");
   }
 
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
-      <div className="flex items-center justify-between">
-        <Label className="flex items-center gap-1.5">
-          <MapPin className="h-4 w-4" />
-          Current location
-          <span className="text-destructive">*</span>
-        </Label>
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={simulateDenied}
-            onChange={(e) => setSimulateDenied(e.target.checked)}
-          />
-          Simulate “permission denied”
-        </label>
-      </div>
+      <Label className="flex items-center gap-1.5">
+        <MapPin className="h-4 w-4" />
+        Current location
+        <span className="text-destructive">*</span>
+      </Label>
 
       {state === "idle" ? (
         <div className="space-y-2">
@@ -95,10 +118,7 @@ export function LocationCapture({ value, onChange }: LocationCaptureProps) {
         <div className="space-y-2">
           <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              Location permission denied or unavailable. Enable location access
-              and try again — the report cannot be submitted without it.
-            </p>
+            <p>{error}</p>
           </div>
           <Button type="button" variant="outline" onClick={capture}>
             <Crosshair className="h-4 w-4" />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CalendarCheck, CheckCircle2, FileQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,10 +21,11 @@ import {
   useFacility,
   useHydrated,
   useMarketer,
-  useMockStore,
+  useDataStore,
   useReport,
-} from "@/lib/mock/store";
-import { useCurrentUser } from "@/lib/auth/mock-session";
+} from "@/lib/data/store";
+import { useCurrentUser } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/client";
 
 interface ReportDetailProps {
   reportId: string;
@@ -35,8 +37,10 @@ export function ReportDetail({ reportId, context }: ReportDetailProps) {
   const report = useReport(reportId);
   const facility = useFacility(report?.facilityId);
   const marketer = useMarketer(report?.marketerId);
-  const { completeFollowUp } = useMockStore();
+  const { completeFollowUp } = useDataStore();
   const user = useCurrentUser();
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
 
   if (!hydrated) return <PageLoading />;
 
@@ -206,14 +210,34 @@ export function ReportDetail({ reportId, context }: ReportDetailProps) {
                     Completed {formatDateTime(report.followUpCompletedAt)}
                   </div>
                 ) : null}
+                {completeError ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {completeError}
+                  </p>
+                ) : null}
                 {canCompleteFollowUp ? (
                   <Button
                     size="sm"
                     className="w-full"
-                    onClick={() => completeFollowUp(report.id)}
+                    disabled={completing}
+                    onClick={async () => {
+                      setCompleting(true);
+                      setCompleteError(null);
+                      try {
+                        await completeFollowUp(report.id);
+                      } catch (e) {
+                        setCompleteError(
+                          e instanceof ApiError
+                            ? e.displayMessage
+                            : "Couldn't mark the follow-up complete. Try again.",
+                        );
+                      } finally {
+                        setCompleting(false);
+                      }
+                    }}
                   >
                     <CalendarCheck className="h-4 w-4" />
-                    Mark follow-up complete
+                    {completing ? "Saving…" : "Mark follow-up complete"}
                   </Button>
                 ) : null}
               </CardContent>

@@ -5,12 +5,9 @@ facilities (pharmacies, hospitals/clinics, laboratories), and for the admin team
 to see **what each marketer did, where they went, who they met, and what
 happened**.
 
-> **Status: frontend prototype.** Authentication is **mocked** and there are **no
-> route guards** — every screen is freely navigable for demos and developer
-> hand-off. Data (facilities, reports) runs on a per-browser mock store. Real
-> auth (Clerk) and the data backend (Postgres + Prisma + Google geocoding) are
-> later phases — see [Roadmap](#roadmap). `@clerk/nextjs` is kept as a dependency
-> for that phase but is not wired into the app right now.
+This is the **Next.js frontend**. It talks to the **iPrescribe API**
+(`iprescribe-api`, Laravel) — real accounts, real Passport tokens, a real
+database, and real Google reverse geocoding. There is no mock data left.
 
 ---
 
@@ -22,47 +19,136 @@ happened**.
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS v4 |
 | UI primitives | shadcn/ui pattern (`src/components/ui/*`), Radix, lucide-react |
-| State (mock) | React context + `localStorage` (`src/lib/mock/store.tsx`) |
+| Backend | iPrescribe API (Laravel + Passport), see [API](#the-api) |
+| Auth | Passport bearer + rotating refresh token, held in `localStorage` |
 | Dates | Native `Intl.DateTimeFormat` pinned to `Africa/Lagos` (`src/lib/datetime.ts`) |
 
 ## Getting started
 
-Requires **Node.js 20+** and **pnpm** (npm/yarn also fine).
+Requires **Node.js 20+** and a running iPrescribe API.
 
 ```bash
-pnpm install
-pnpm dev
+cp .env.example .env.local     # point NEXT_PUBLIC_API_BASE_URL at your API
+npm install
+npm run dev
 # open http://localhost:3000
 ```
 
-Other scripts:
+Other scripts: `npm run build`, `npm start`, `npm run lint`, `npm run format`.
 
-```bash
-pnpm build     # production build
-pnpm start     # run the production build
-pnpm lint      # eslint
-pnpm format    # prettier --write .
+### Environment
+
+One variable, and it is required:
+
+```
+NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8000/api"
 ```
 
-## Authentication (mocked)
+Nothing secret lives here. The Google key, the database and the token signing
+keys are all on the API side; the browser only ever sends coordinates and
+credentials.
 
-This phase is a **frontend prototype**. There is **no real authentication and no
-route protection** — every screen is reachable directly by URL.
+## The API
 
-- **`/login`** — a visual login screen with a **Marketer / Admin** toggle:
-  - **Marketer** — *Log in* (any/no input) → `/dashboard`. Or **Create an
-    account** → dummy signup form → *Create account* → `/dashboard`. No OTP, no
-    email verification, no account.
-  - **Admin** — *Log in as Admin* (any/no input) → `/admin`. No signup option, no
-    account required, no "couldn't find your account".
-- The chosen role is stored in `localStorage` (`src/lib/auth/mock-session.tsx`)
-  only so the top bar shows the right label; it does not gate anything.
-- **No `middleware.ts`, no `<ClerkProvider>`, no role checks.** `@clerk/nextjs`
-  stays in `package.json` for the future auth phase but is not imported anywhere.
+Everything this app needs was added to `iprescribe-api` under the
+`api_marketer` Passport guard (marketers) and the existing `api_admin` guard
+(admins). See that repo's `routes/marketer/*.php` and
+`routes/admin/marketers.php`.
 
-Facilities/reports use a per-browser mock store (`src/lib/mock/`). Submitted
-reports persist to `localStorage`; **Reset demo data** (top bar) restores the
-seed.
+**One-time setup on any environment** (the marketer guard needs its own Passport
+personal-access client, exactly like the pharmacy and laboratory guards):
+
+```bash
+php artisan migrate
+php artisan passport:client --personal --provider=marketers \
+  --name="Marketer Personal Access Client"
+
+# optional demo data — three marketers, six Lagos facilities, two weeks of visits
+php artisan db:seed --class=MarketerSeeder
+```
+
+### Endpoints
+
+**Marketer** — `auth:api_marketer`, every read scoped to the token's owner:
+
+| Method | Path |
+| --- | --- |
+| POST | `/v1/marketer/auth/register` · `/login` · `/refresh-token` |
+| GET/POST | `/v1/marketer/auth/me` · `/verify` · `/logout` · `/change-password` |
+| GET | `/v1/marketer/dashboard/stats` · `/dashboard/summary` |
+| GET/POST | `/v1/marketer/facilities` |
+| GET | `/v1/marketer/facilities/{id}` |
+| GET/POST | `/v1/marketer/reports` |
+| GET | `/v1/marketer/reports/{id}` |
+| POST | `/v1/marketer/reports/{id}/complete-follow-up` |
+| GET | `/v1/marketer/utils/reverse-geocode?latitude=&longitude=` |
+
+**Admin** — `auth:api_admin`, read-only over reports and facilities:
+
+| Method | Path |
+| --- | --- |
+| GET | `/v1/admin/marketer-dashboard/stats` · `/summary` |
+| GET/POST | `/v1/admin/marketers` |
+| GET | `/v1/admin/marketers/{id}` · `/{id}/active-dates` |
+| POST | `/v1/admin/marketers/{id}/status` |
+| GET | `/v1/admin/marketer-reports` · `/{id}` |
+| GET | `/v1/admin/marketer-facilities` · `/{id}` |
+
+Report and facility lists accept the same filters the UI exposes:
+`marketer_id`, `facility_id`, `facility_type`, `outcome`,
+`follow_up` (`REQUIRED|OPEN|COMPLETED|NONE`), `date`, `date_from`, `date_to`,
+`search`, `sort`, `order`, `limit`.
+
+Responses are the API's standard envelope — `{ data, message, status }`, with
+list endpoints returning a Laravel paginator inside `data`. Enums travel in
+`UPPER_SNAKE` (the DB stores `lower_snake`; the forms differ only by case), and
+ids are Hashids, so the domain types in `src/lib/types.ts` are unchanged from
+the prototype.
+
+## Authentication
+
+Marketers and admins are **separate actors on the API** — different tables,
+different Passport guards — so the login screen's Marketer/Admin toggle chooses
+an endpoint, not just a label.
+
+- Marketers can self-register (`Create an account`) and are signed in straight
+  away. Admin accounts are provisioned by an administrator; there is no admin
+  signup.
+- `src/lib/auth/session.tsx` holds the session, restores it from the stored
+  token on reload, and exposes `useSession()` / `useCurrentUser()` /
+  `useAuthActions()`.
+- `<RequireRole>` guards both app shells: the wrong role is sent to its own
+  home, no session at all to `/login`.
+- `src/lib/api/client.ts` attaches the bearer token and, on a 401, rotates the
+  refresh token once and retries before giving up.
+
+## Project structure
+
+```
+src/
+  app/
+    (auth)/login/              # marketer + admin sign-in, marketer sign-up
+    (marketer)/                # marketer shell + screens (RequireRole MARKETER)
+    (admin)/admin/             # admin shell + screens  (RequireRole ADMIN)
+    layout.tsx, providers.tsx  # root layout + client providers
+  components/
+    ui/                        # shadcn primitives
+    shared/                    # StatCard, badges, timelines, tables, report detail
+    forms/                     # ReportForm wizard, FacilityCombobox, LocationCapture
+    layout/                    # AppShell
+    admin/                     # DailyActivityView
+  lib/
+    api/
+      client.ts                # fetch wrapper, envelope, tokens, refresh, paging
+      auth.ts facilities.ts reports.ts marketers.ts dashboard.ts
+    auth/session.tsx           # session state + <RequireRole>
+    data/store.tsx             # live data store + selector hooks
+    types.ts                   # domain types + enum label maps (mirror the API)
+    datetime.ts                # Africa/Lagos date helpers
+    reporting.ts               # pure aggregation/filtering (client-side)
+    geocoding.ts               # reverse geocoding via the API
+    nav.ts                     # nav config
+```
 
 ### Screens
 
@@ -73,76 +159,41 @@ seed.
 daily, `?date=`), `/admin/daily`, `/admin/reports`, `/admin/reports/[id]`,
 `/admin/facilities`, `/admin/facilities/[id]`.
 
-## Project structure
+## How data loading works
 
-```
-src/
-  app/
-    (auth)/login/              # mock login / signup (no real auth)
-    (marketer)/                # marketer shell + screens
-    (admin)/admin/             # admin shell + screens
-    layout.tsx, providers.tsx  # root layout + client providers
-  components/
-    ui/                        # shadcn primitives
-    shared/                    # StatCard, badges, timelines, tables, report detail
-    forms/                     # ReportForm wizard, FacilityCombobox, LocationCapture
-    layout/                    # AppShell, ResetDemoData
-    admin/                     # DailyActivityView
-  lib/
-    types.ts                   # domain types + enum label maps (mirror the schema)
-    datetime.ts                # Africa/Lagos date helpers
-    reporting.ts               # pure aggregation/filtering (future service-layer logic)
-    geocoding.ts               # MOCK reverse geocoding (swap for Google later)
-    nav.ts                     # nav config
-    auth/mock-session.tsx      # MOCK session (localStorage role only, no guards)
-    mock/
-      data.ts                  # seed marketers / facilities / reports
-      store.tsx                # in-memory + localStorage data store
-  types/globals.d.ts           # session-claim types (dormant — for the future Clerk phase)
-```
+`src/lib/data/store.tsx` loads the collections the session is allowed to see
+once, keeps them in React state, and exposes the selector hooks every screen
+uses (`useReports`, `useFacilities`, `useMarketer`, …). Reads are scoped by
+role — a marketer gets their own reports, an admin gets the team's — and that
+scoping is enforced server-side too, so the marketer endpoints ignore any
+marketer id sent from the client.
 
-## Environment variables
-
-**None are required in this phase.** `npm run build`, local dev, and the Vercel
-deploy all work with no env vars — auth is mocked and the data is a mock store.
-
-`.env.example` still lists the Clerk / Postgres / geocoding variables so they are
-ready for the phases that reintroduce real auth and a data backend.
-
-## What is still mocked, and how to replace it
-
-| Mock | File | Replace with |
-| --- | --- | --- |
-| Data store (CRUD) | `src/lib/mock/store.tsx`, `src/lib/mock/data.ts` | Server Components calling `src/lib/services/*` (Prisma) for reads; Server Actions for writes. Selector hooks can stay as thin client wrappers if useful. |
-| Reverse geocoding | `src/lib/geocoding.ts` | Server route calling the Google Geocoding API with a secret key. Keep `getAddressForCoords()` / `mapLink()` signatures. |
-| Location capture | `src/components/forms/location-capture.tsx` | `navigator.geolocation.getCurrentPosition` + the geocode route. The `value` / `onChange` contract and the “must succeed before submit” rule stay the same. |
+The dashboards then filter and aggregate those arrays client-side via
+`src/lib/reporting.ts`. That keeps every screen synchronous and is fine at
+internal-tool scale. **If a workspace outgrows it**, the API already exposes the
+same filters and the same aggregates server-side — `src/lib/api/reports.ts` and
+`src/lib/api/dashboard.ts` mirror `reporting.ts` definition for definition — so
+screens can be moved over one at a time without touching the UI.
 
 ## Locked product decisions
 
-- **Timezone:** `Africa/Lagos` defines every “today” / “this week”.
+- **Timezone:** `Africa/Lagos` defines every "today" / "this week", weeks start
+  Monday. The API stores timestamps in the same zone, so both sides agree.
 - **Location is mandatory** — a report cannot be submitted without a captured
-  location; permission denied ⇒ clear error + retry, never a save.
-- **Reports are immutable** after submission. The only post-submit change a
-  marketer can make is marking their own follow-up complete.
-- **Reverse geocoding provider:** Google (abstracted behind the service layer).
-- Marketers never type their own name or the report date/time — the system adds
-  them automatically.
-
-## Roadmap
-
-1. ✅ Frontend prototype on mock data + mock auth (current)
-2. Real auth + role-based access control (Clerk) — middleware, `<ClerkProvider>`,
-   role checks. `@clerk/nextjs` is already a dependency.
-3. Data layer — Prisma schema, migrations, seed (Neon Postgres)
-4. Wire Submit Report + dashboards to real data (Server Actions / Components)
-5. Admin drill-downs on real data
-6. Facilities on real data
-7. Google reverse geocoding + real browser geolocation
-8. Polish, tests
+  GPS reading; permission denied ⇒ clear error + retry, never a save. The
+  reverse-geocoded address is best-effort: a geocoding outage leaves the address
+  blank but still allows the submission.
+- **Reports are immutable** after submission. The only post-submit change is the
+  authoring marketer marking their own follow-up complete — enforced server-side.
+- **Reverse geocoding provider:** Google, called from the API so the key never
+  reaches the browser.
+- Marketers never type their own name or the report date/time — the server adds
+  them from the token and the clock.
 
 ## Notes
 
-- `next.config.mjs` currently sets `eslint.ignoreDuringBuilds: true` so a stray
-  lint warning doesn’t block `next build`. Run `pnpm lint` directly; re-enable
+- `next.config.mjs` sets `eslint.ignoreDuringBuilds: true` so a stray lint
+  warning doesn't block `next build`. Run `npm run lint` directly; re-enable
   build-time lint when CI enforces it.
-- No environment variables are needed to build or run this phase.
+- Facility and report ids are opaque Hashids, not integers — don't try to parse
+  or order by them.

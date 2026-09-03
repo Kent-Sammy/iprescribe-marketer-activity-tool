@@ -31,7 +31,7 @@ import {
   useHydrated,
   useMarketers,
   useReports,
-} from "@/lib/mock/store";
+} from "@/lib/data/store";
 
 function FacilityDetailInner({ id }: { id: string }) {
   const hydrated = useHydrated();

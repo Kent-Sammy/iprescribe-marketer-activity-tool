@@ -22,9 +22,8 @@ import {
   type Outcome,
 } from "@/lib/types";
 import { filterReports } from "@/lib/reporting";
-import { useFacilities, useHydrated, useMarketers, useReports } from "@/lib/mock/store";
-import { useCurrentUser } from "@/lib/auth/mock-session";
-import { MOCK_MARKETERS } from "@/lib/mock/data";
+import { useFacilities, useHydrated, useMarketers, useReports } from "@/lib/data/store";
+import { useCurrentUser } from "@/lib/auth/session";
 
 const ALL = "ALL";
 
@@ -34,7 +33,7 @@ export default function MyReportsPage() {
   const facilities = useFacilities();
   const marketers = useMarketers();
   const user = useCurrentUser();
-  const marketerId = user.marketerId ?? MOCK_MARKETERS[0].id;
+  const marketerId = user.marketerId ?? user.id;
 
   const [date, setDate] = useState("");
   const [facilityType, setFacilityType] = useState<FacilityType | typeof ALL>(ALL);

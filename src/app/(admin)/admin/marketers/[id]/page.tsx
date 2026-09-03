@@ -15,7 +15,7 @@ import { DailyActivityView } from "@/components/admin/daily-activity-view";
 import { cn } from "@/lib/utils";
 import { formatDate, todayYMD } from "@/lib/datetime";
 import { activeDatesForMarketer } from "@/lib/reporting";
-import { useHydrated, useMarketer, useReports } from "@/lib/mock/store";
+import { useHydrated, useMarketer, useReports } from "@/lib/data/store";
 
 function MarketerActivityInner({ id }: { id: string }) {
   const hydrated = useHydrated();

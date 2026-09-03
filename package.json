@@ -2,7 +2,7 @@
   "name": "marketer-activity-tool",
   "version": "0.1.0",
   "private": true,
-  "description": "Marketer Activity & Field Reporting Tool — frontend (mock data)",
+  "description": "Marketer Activity & Field Reporting Tool — Next.js frontend for the iPrescribe API",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +11,6 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.0.0",
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-select": "^2.1.4",
     "@radix-ui/react-slot": "^1.1.1",
